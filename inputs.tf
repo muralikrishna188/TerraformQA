@@ -12,7 +12,7 @@ variable "client_id" {
 }
 variable "client_secret" {
     type = string 
-    default = "XoP8Q~dcXKviIhep_Hcv31me.eWJodFQmGGQUa32"
+    default = "baN8Q~yNuxrpjetk-ripJkLwlQW_-~n22iTRGaja"
     description = "myenv client secret"
   
 }
