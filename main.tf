@@ -1,9 +1,16 @@
 terraform {
-
+  backend "azurerm" {
+    resource_group_name = "Amazon-US-RG"
+    storage_account_name = "amzstg0014"
+    container_name = "devcontainer"
+    key = "terraform.devcontainer"
+    access_key = "c8BwUiVXkkjchMpQi6Yb/1SAi8bPVPwYq7BktPUkb4CqwGeV3Q1dQE05xhOErA6mxAAP4pszVagI+AStcfl9Gg=="
+    
+  }
   required_providers {
     azurerm = {
         source = "hashicorp/azurerm"
-        version = "4.27.0"
+        version = "4.57.0"
     }
   }
 }
@@ -18,39 +25,171 @@ provider "azurerm" {
 
   
 }
-locals {
-  setup_name = "amazon-hyd"
-}
-resource "azurerm_resource_group" "azapprg101" {
-    name = "azureapprg003"
-    location = "central us"
-    tags = {
-      "name" = "${local.setup_name}-rsg"
-    }
+resource "azurerm_resource_group" "azprodrglabel01" {
+    name = "myprodrg"
+    location = "eastus"
   
 }
-resource "azurerm_service_plan" "azappplan101" {
-    name = "devazappplan"
-    resource_group_name = azurerm_resource_group.azapprg101.name
-    location = azurerm_resource_group.azapprg101.location
-    sku_name = "S1"
-    os_type = "Windows"
-    tags = {
-      "name" = "${local.setup_name}-appplan"
-    }
+
+resource "azurerm_virtual_network" "azprodvnetlabel01" {
+    name = "azprovnet01"
+    location = azurerm_resource_group.azprodrglabel01.location
+    resource_group_name = azurerm_resource_group.azprodrglabel01.name
+    address_space = [ "10.70.0.0/16" ]
+
   
 }
-resource "azurerm_windows_web_app" "azwebapp101" {
-    name = "mywebapp02456"
-    resource_group_name = azurerm_resource_group.azapprg101.name
-    location = azurerm_resource_group.azapprg101.location
-    service_plan_id = azurerm_service_plan.azappplan101.id
-    depends_on = [ azurerm_service_plan.azappplan101 ]
-    site_config {
-      
-    }
-    tags = {
-      "name" = "${local.setup_name}-webapp"
-    }
+
+resource "azurerm_subnet" "azwebsubnet001" {
+  name = "websubnet"
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  virtual_network_name = azurerm_virtual_network.azprodvnetlabel01.name
+  address_prefixes = [ "10.70.1.0/24" ]
   
 }
+resource "azurerm_public_ip" "azwebpubiplabel001" {
+  name = "azwebpublicip01"
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  location = azurerm_resource_group.azprodrglabel01.location
+  allocation_method = "Static"
+  
+}
+resource "azurerm_network_interface" "azwebniclabel001" {
+  name = "azwebnic01"
+  location = azurerm_resource_group.azprodrglabel01.location
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  ip_configuration {
+    name = "webnicocnfig"
+    subnet_id = azurerm_subnet.azwebsubnet001.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id = azurerm_public_ip.azwebpubiplabel001.id
+  }
+  
+}
+resource "azurerm_linux_virtual_machine" "azwebvmlabel01" {
+  name = "azwebesrver01"
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  location = azurerm_resource_group.azprodrglabel01.location
+  size = "Standard_F2"
+  admin_username = "adminuser"
+  network_interface_ids = [azurerm_network_interface.azwebniclabel001.id,]
+  admin_ssh_key {
+    username = "adminuser"
+    public_key = file("~/.ssh/id_ed25519.pub")
+  }
+  os_disk {
+    caching = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+  source_image_reference {
+    publisher = "Canonical"
+    offer = "0001-com-ubuntu-server-jammy"
+    sku = "22_04-lts"
+    version = "latest"
+  }
+
+}
+
+
+resource "azurerm_subnet" "azappsubnet001" {
+  name = "appsubnet"
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  virtual_network_name = azurerm_virtual_network.azprodvnetlabel01.name
+  address_prefixes = [ "10.70.2.0/24" ]
+  
+}
+resource "azurerm_public_ip" "azappubiplabel001" {
+  name = "azapppublicip01"
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  location = azurerm_resource_group.azprodrglabel01.location
+  allocation_method = "Static"
+  
+}
+resource "azurerm_network_interface" "azappniclabel001" {
+  name = "azappnic01"
+  location = azurerm_resource_group.azprodrglabel01.location
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  ip_configuration {
+    name = "appnicocnfig"
+    subnet_id = azurerm_subnet.azappsubnet001.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id = azurerm_public_ip.azappubiplabel001.id
+  }
+  
+}
+resource "azurerm_linux_virtual_machine" "azappvmlabel01" {
+  name = "azappsrver01"
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  location = azurerm_resource_group.azprodrglabel01.location
+  size = "Standard_F2"
+  admin_username = "adminuser"
+  network_interface_ids = [azurerm_network_interface.azappniclabel001.id,]
+  admin_ssh_key {
+    username = "adminuser"
+    public_key = file("~/.ssh/id_ed25519.pub")
+  }
+  os_disk {
+    caching = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+  source_image_reference {
+    publisher = "Canonical"
+    offer = "0001-com-ubuntu-server-jammy"
+    sku = "22_04-lts"
+    version = "latest"
+  }
+
+}
+
+
+resource "azurerm_subnet" "azdbsubnet001" {
+  name = "dbsubnet"
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  virtual_network_name = azurerm_virtual_network.azprodvnetlabel01.name
+  address_prefixes = [ "10.70.3.0/24" ]
+  
+}
+resource "azurerm_public_ip" "azdbpubiplabel001" {
+  name = "azdbpublicip01"
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  location = azurerm_resource_group.azprodrglabel01.location
+  allocation_method = "Static"
+  
+}
+resource "azurerm_network_interface" "azdbniclabel001" {
+  name = "azdbnic01"
+  location = azurerm_resource_group.azprodrglabel01.location
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  ip_configuration {
+    name = "dbnicocnfig"
+    subnet_id = azurerm_subnet.azdbsubnet001.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id = azurerm_public_ip.azdbpubiplabel001.id
+  }
+  
+}
+resource "azurerm_linux_virtual_machine" "azdbvmlabel01" {
+  name = "azdbsrver01"
+  resource_group_name = azurerm_resource_group.azprodrglabel01.name
+  location = azurerm_resource_group.azprodrglabel01.location
+  size = "Standard_F2"
+  admin_username = "adminuser"
+  network_interface_ids = [azurerm_network_interface.azdbniclabel001.id,]
+  admin_ssh_key {
+    username = "adminuser"
+    public_key = file("~/.ssh/id_ed25519.pub")
+  }
+  os_disk {
+    caching = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+  source_image_reference {
+    publisher = "Canonical"
+    offer = "0001-com-ubuntu-server-jammy"
+    sku = "22_04-lts"
+    version = "latest"
+  }
+
+}
+
+
